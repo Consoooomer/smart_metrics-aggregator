@@ -77,3 +77,27 @@ go run ./cmd/loadgen -addr 127.0.0.1:9000 -metrics 200000 -concurrency 8
 Имеется проблема с разделением на батчи - все 200000 запросов оказались в одном батче, а PostgreSQL такого не позволяет
 
 Пофиксим InsertBatch
+
+В последнем коммите обновили InsertBatch, теперь запросы разделяются на батчи по 65535
+
+И все записи спокойно добавляются в бд
+
+```[metrics-collector] 2025/11/18 17:25:07.318817 server.go:35: listening on [::]:9000
+[metrics-collector] 2025/11/18 17:25:15.408690 server.go:69: new connection from 127.0.0.1:62801
+[metrics-collector] 2025/11/18 17:25:15.409435 server.go:69: new connection from 127.0.0.1:62807
+[metrics-collector] 2025/11/18 17:25:15.409435 server.go:69: new connection from 127.0.0.1:62806
+[metrics-collector] 2025/11/18 17:25:15.409435 server.go:69: new connection from 127.0.0.1:62800
+[metrics-collector] 2025/11/18 17:25:15.410958 server.go:69: new connection from 127.0.0.1:62803
+[metrics-collector] 2025/11/18 17:25:15.410958 server.go:69: new connection from 127.0.0.1:62802
+[metrics-collector] 2025/11/18 17:25:15.410958 server.go:69: new connection from 127.0.0.1:62805
+[metrics-collector] 2025/11/18 17:25:15.410958 server.go:69: new connection from 127.0.0.1:62804
+[metrics-collector] 2025/11/18 17:25:15.744012 server.go:79: read error from 127.0.0.1:62801: EOF
+[metrics-collector] 2025/11/18 17:25:15.744012 server.go:79: read error from 127.0.0.1:62805: EOF
+[metrics-collector] 2025/11/18 17:25:15.744012 server.go:79: read error from 127.0.0.1:62806: EOF
+[metrics-collector] 2025/11/18 17:25:15.744012 server.go:79: read error from 127.0.0.1:62802: EOF
+[metrics-collector] 2025/11/18 17:25:15.744012 server.go:79: read error from 127.0.0.1:62800: EOF
+[metrics-collector] 2025/11/18 17:25:15.744643 server.go:79: read error from 127.0.0.1:62804: EOF
+[metrics-collector] 2025/11/18 17:25:15.746299 server.go:79: read error from 127.0.0.1:62803: EOF
+[metrics-collector] 2025/11/18 17:25:15.748705 server.go:79: read error from 127.0.0.1:62807: EOF
+```
+

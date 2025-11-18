@@ -61,29 +61,57 @@ SELECT create_hypertable('metrics', 'time', if_not_exists => TRUE);
 }
 
 func (c *TimescaleClient) InsertBatch(ctx context.Context, batch store.Batch) error {
-	var (
-		values []string
-		args   []any
-		argPos = 1
-	)
+	const maxParams = 65535
+	const paramsPerRow = 3
+	const maxRows = maxParams / paramsPerRow
 
+	type row struct {
+		ts   time.Time
+		name string
+		val  float64
+	}
+
+	rows := make([]row, 0)
 	for name, points := range batch {
 		for _, p := range points {
-			values = append(values, fmt.Sprintf("($%d, $%d, $%d)", argPos, argPos+1, argPos+2))
-			args = append(args, p.Timestamp, name, p.Value)
-			argPos += 3
+			rows = append(rows, row{
+				ts:   p.Timestamp,
+				name: name,
+				val:  p.Value,
+			})
 		}
 	}
 
-	if len(values) == 0 {
+	if len(rows) == 0 {
 		return nil
 	}
 
-	query := "INSERT INTO metrics (time, name, value) VALUES " + strings.Join(values, ",")
-	_, err := c.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("insert batch: %w", err)
+	for offset := 0; offset < len(rows); {
+		end := offset + maxRows
+		if end > len(rows) {
+			end = len(rows)
+		}
+		chunk := rows[offset:end]
+
+		values := make([]string, 0, len(chunk))
+		args := make([]any, 0, len(chunk)*paramsPerRow)
+		argPos := 1
+
+		for _, r := range chunk {
+			values = append(values, fmt.Sprintf("($%d,$%d,$%d)", argPos, argPos+1, argPos+2))
+			args = append(args, r.ts, r.name, r.val)
+			argPos += 3
+		}
+
+		query := "INSERT INTO metrics (time, name, value) VALUES " + strings.Join(values, ",")
+
+		if _, err := c.db.ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("insert batch chunk [%d:%d]: %w", offset, end, err)
+		}
+
+		offset = end
 	}
+
 	return nil
 }
 
